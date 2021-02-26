@@ -195,12 +195,10 @@ public:
         }
     }
 
-    HashMap& operator=(const HashMap &oth) {
-        if (oth.arr != arr) {
-            clear();
-            for (auto item : oth) {
-                insert(item);
-            }
+    HashMap& operator=(HashMap oth) {
+        clear();
+        for (auto item : oth) {
+            insert(item);
         }
         return (*this);
     }
@@ -233,8 +231,9 @@ public:
         size_t i = 0;
         int first_deleted = -1;
         while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == item.first && !used[h1])
+            if (arr[h1]->first == item.first && !used[h1]) {
                 return;
+            }
             if (used[h1] && first_deleted == -1) {
                 first_deleted = h1;
             }
