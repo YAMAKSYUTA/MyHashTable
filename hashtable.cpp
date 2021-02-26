@@ -181,8 +181,8 @@ public:
 
     HashMap(const HashMap& oth) : hasher(oth.hasher) {
         init();
-        for (auto item : oth) {
-            insert(item);
+        for (auto it = oth.begin(); it != oth.end(); ++it) {
+            insert(*it);
         }
     }
 
@@ -196,8 +196,11 @@ public:
     }
 
     HashMap& operator=(const HashMap &oth) {
-        for (auto it : oth) {
-            insert(it);
+        if (oth.arr != arr) {
+            clear();
+            for (auto item : oth) {
+                insert(item);
+            }
         }
         return (*this);
     }
