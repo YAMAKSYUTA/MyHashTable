@@ -225,23 +225,23 @@ public:
         if (size_all_non_nullptr > 2 * sz) {
             rehash();
         }
-        size_t h1 = hasher(item.first) % buffer_size;
+        size_t hash = hasher(item.first) % buffer_size;
         size_t i = 0;
         bool found = false;
         size_t first_deleted = 0;
-        while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == item.first && !used[h1]) {
+        while (arr[hash] != nullptr && i < buffer_size) {
+            if (arr[hash]->first == item.first && !used[hash]) {
                 return;
             }
-            if (used[h1] && !found) {
-                first_deleted = h1;
+            if (used[hash] && !found) {
+                first_deleted = hash;
                 found = true;
             }
-            h1 = (h1 + 1) % buffer_size;
+            hash = (hash + 1) % buffer_size;
             ++i;
         }
         if (!found) {
-            arr[h1] = new std::pair<const KeyType, ValueType>(item.first, item.second);
+            arr[hash] = new std::pair<const KeyType, ValueType>(item.first, item.second);
             ++size_all_non_nullptr;
         }
         else {
@@ -253,15 +253,15 @@ public:
     }
 
     void erase(const KeyType& key) {
-        size_t h1 = hasher(key) % buffer_size;
+        size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == key && !used[h1]) {
-                used[h1] = true;
+        while (arr[hash] != nullptr && i < buffer_size) {
+            if (arr[hash]->first == key && !used[hash]) {
+                used[hash] = true;
                 --sz;
                 return;
             }
-            h1 = (h1 + 1) % buffer_size;
+            hash = (hash + 1) % buffer_size;
             ++i;
         }
     }
@@ -279,13 +279,13 @@ public:
     }
 
     ValueType& operator[](const KeyType& key) {
-        size_t h1 = hasher(key) % buffer_size;
+        size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == key && !used[h1]) {
-                return arr[h1]->second;
+        while (arr[hash] != nullptr && i < buffer_size) {
+            if (arr[hash]->first == key && !used[hash]) {
+                return arr[hash]->second;
             }
-            h1 = (h1 + 1) % buffer_size;
+            hash = (hash + 1) % buffer_size;
             ++i;
         }
         insert({ key, ValueType() });
@@ -293,13 +293,13 @@ public:
     }
 
     const ValueType& at(const KeyType& key) const {
-        size_t h1 = hasher(key) % buffer_size;
+        size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == key && !used[h1]) {
-                return arr[h1]->second;
+        while (arr[hash] != nullptr && i < buffer_size) {
+            if (arr[hash]->first == key && !used[hash]) {
+                return arr[hash]->second;
             }
-            h1 = (h1 + 1) % buffer_size;
+            hash = (hash + 1) % buffer_size;
             ++i;
         }
         throw std::out_of_range("out of range");
@@ -322,26 +322,26 @@ public:
     }
 
     iterator find(const KeyType& key) {
-        size_t h1 = hasher(key) % buffer_size;
+        size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == key && !used[h1]) {
-                return iterator(h1, arr, used);
+        while (arr[hash] != nullptr && i < buffer_size) {
+            if (arr[hash]->first == key && !used[hash]) {
+                return iterator(hash, arr, used);
             }
-            h1 = (h1 + 1) % buffer_size;
+            hash = (hash + 1) % buffer_size;
             ++i;
         }
         return end();
     }
 
     const_iterator find(const KeyType& key) const {
-        size_t h1 = hasher(key) % buffer_size;
+        size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[h1] != nullptr && i < buffer_size) {
-            if (arr[h1]->first == key && !used[h1]) {
-                return const_iterator(h1, arr, used);
+        while (arr[hash] != nullptr && i < buffer_size) {
+            if (arr[hash]->first == key && !used[hash]) {
+                return const_iterator(hash, arr, used);
             }
-            h1 = (h1 + 1) % buffer_size;
+            hash = (hash + 1) % buffer_size;
             ++i;
         }
         return end();
