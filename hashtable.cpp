@@ -1,7 +1,6 @@
 #include <functional>
 #include <cstddef>
 #include <vector>
-#include <iostream>
 
 template<class KeyType, class ValueType, class Hash = std::hash<KeyType>>
 class HashMap {
@@ -19,6 +18,7 @@ private:
         size_all_non_nullptr = 0;
         sz = 0;
         std::vector<bool> used2 = used;
+        used.clear();
         used.resize(buffer_size, false);
         std::vector<std::pair<const KeyType, ValueType>*> arr2(buffer_size);
         for (size_t i = 0; i < buffer_size; ++i) {
@@ -40,7 +40,7 @@ private:
         size_all_non_nullptr = 0;
         sz = 0;
         std::vector<bool> used2 = used;
-        std::fill(used.begin(), used.end(), false);
+        used.resize(buffer_size, false);
         std::vector<std::pair<const KeyType, ValueType>*> arr2(buffer_size);
         for (size_t i = 0; i < buffer_size; ++i) {
             arr2[i] = nullptr;
@@ -114,7 +114,7 @@ public:
             return (*ptr)[pos];
         }
 
-        std::pair<KeyType, ValueType> operator*() {
+        std::pair<const KeyType, ValueType> operator*() {
             return *(*ptr)[pos];
         }
     };
@@ -162,7 +162,7 @@ public:
             return (*ptr)[pos];
         }
 
-        std::pair<KeyType, ValueType> operator*() {
+        std::pair<const KeyType, ValueType> operator*() {
             return *(*ptr)[pos];
         }
     };
@@ -171,13 +171,8 @@ public:
         init();
     }
 
-    HashMap(std::initializer_list<std::pair<KeyType, ValueType>> list, Hash hasher_ = Hash()) {
-        hasher = hasher_;
-        init();
-        for (auto item : list) {
-            insert(item);
-        }
-    }
+    HashMap(std::initializer_list<std::pair<KeyType, ValueType>> list, Hash hasher_ = Hash()) : 
+        HashMap(list.begin(), list.end(), hasher_) {}
 
     HashMap(const HashMap& oth) : hasher(oth.hasher) {
         init();
@@ -195,10 +190,13 @@ public:
         }
     }
 
-    HashMap& operator=(HashMap oth) {
-        clear();
-        for (auto item : oth) {
-            insert(item);
+    HashMap& operator=(const HashMap &oth) {
+        if (&oth != this) {
+            hasher = oth.hasher;
+            clear();
+            for (auto it : oth) {
+                insert(it);
+            }
         }
         return (*this);
     }
@@ -224,23 +222,25 @@ public:
         if (sz + 1 > size_t(rehash_size * buffer_size)) {
             resize();
         }
-        else if (size_all_non_nullptr > 2 * sz) {
+        if (size_all_non_nullptr > 2 * sz) {
             rehash();
         }
         size_t h1 = hasher(item.first) % buffer_size;
         size_t i = 0;
-        int first_deleted = -1;
+        bool found = false;
+        size_t first_deleted = 0;
         while (arr[h1] != nullptr && i < buffer_size) {
             if (arr[h1]->first == item.first && !used[h1]) {
                 return;
             }
-            if (used[h1] && first_deleted == -1) {
+            if (used[h1] && !found) {
                 first_deleted = h1;
+                found = true;
             }
             h1 = (h1 + 1) % buffer_size;
             ++i;
         }
-        if (first_deleted == -1) {
+        if (!found) {
             arr[h1] = new std::pair<const KeyType, ValueType>(item.first, item.second);
             ++size_all_non_nullptr;
         }
