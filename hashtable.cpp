@@ -26,12 +26,15 @@ class HashMap {
         iterator() : pos(0), ptr(nullptr), check(nullptr),
             is_empty(nullptr) {}
 
+        
         // Constructor with the given position.
         iterator(size_t pos_,
-            std::vector<std::pair<const KeyType, ValueType>>& ar,
+            std::vector<std::pair<KeyType, ValueType>>& ar,
             std::vector<bool>& used_, std::vector<bool>& is_empty_) :
-            pos(pos_), ptr(&ar),
-            check(&used_), is_empty(&is_empty_) {
+            pos(pos_),
+            ptr(reinterpret_cast<std::vector<std::pair<const KeyType, ValueType>>*>(&ar)),
+            check(&used_),
+            is_empty(&is_empty_) {
             go();
         }
         // Pre-increment iterator in O(1) amortized.
@@ -93,9 +96,10 @@ class HashMap {
 
         // Constructor with the given position.
         const_iterator(size_t pos_,
-            const std::vector<std::pair<const KeyType, ValueType>>& ar,
+            const std::vector<std::pair<KeyType, ValueType>>& ar,
             const std::vector<bool>& used_,
-            const std::vector<bool>& is_empty_) : pos(pos_), ptr(&ar),
+            const std::vector<bool>& is_empty_) : pos(pos_),
+            ptr(reinterpret_cast<const std::vector<std::pair<const KeyType, ValueType>>*>(&ar)),
             check(&used_), is_empty(&is_empty_) {
             go();
         }
@@ -127,7 +131,7 @@ class HashMap {
 
         // Returns constant item reference in O(1) time.
         std::pair<const KeyType, ValueType>* operator->() {
-            return &(*ptr)[pos];
+            return const_cast<std::pair<const KeyType, ValueType>*>(&((*ptr)[pos]));
         }
 
         // Returns constant item object in O(1) time.
