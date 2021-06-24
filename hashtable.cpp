@@ -11,23 +11,29 @@
 template<class KeyType, class ValueType, class Hash = std::hash<KeyType>>
 class HashMap {
  public:
+    // default_size - size of hash table
+    // when first initialized or cleared.
     constexpr static size_t default_size = 8;
     constexpr static size_t decreasing_size = 2;
+    constexpr static size_t increasing_size = 2;
+    constexpr static size_t allowed_deleted_elements = 2;
     constexpr static double overload_size = 0.75;
 
     // Iterator allows to iterate over elements in table and work with them.
     class iterator {
      public:
-         // Default constructor.
-        iterator() : pos(0), ptr(nullptr), check(nullptr) {}
+        // Default constructor.
+        iterator() : pos(0), ptr(nullptr), check(nullptr),
+            is_empty(nullptr) {}
 
         // Constructor with the given position.
         iterator(size_t pos_,
-            std::vector<std::pair<const KeyType, ValueType>*>& ar,
-            std::vector<bool>& used_) : pos(pos_), ptr(&ar), check(&used_) {
+            std::vector<std::pair<const KeyType, ValueType>>& ar,
+            std::vector<bool>& used_, std::vector<bool>& is_empty_) :
+            pos(pos_), ptr(&ar),
+            check(&used_), is_empty(&is_empty_) {
             go();
         }
-
         // Pre-increment iterator in O(1) amortized.
         iterator operator++() {
             ++pos;
@@ -55,23 +61,23 @@ class HashMap {
 
         // Returns item reference in O(1) time.
         std::pair<const KeyType, ValueType>* operator->() {
-            return (*ptr)[pos];
+            return &((*ptr)[pos]);
         }
 
         // Returns item object in O(1) time.
         std::pair<const KeyType, ValueType> operator*() {
-            return *(*ptr)[pos];
+            return (*ptr)[pos];
         }
 
      private:
         size_t pos;
-        std::vector<std::pair<const KeyType, ValueType>*>* ptr;
+        std::vector<std::pair<const KeyType, ValueType>>* ptr;
         std::vector<bool>* check;
-
+        std::vector<bool>* is_empty;
         // Finds the next element in O(1) amortized.
         void go() {
-            while (pos < ptr->size() && ((*ptr)[pos] == nullptr
-                || (*check)[pos])) {
+            while (pos < ptr->size() &&
+                ((*is_empty)[pos] || (*check)[pos])) {
                 ++pos;
             }
         }
@@ -81,14 +87,16 @@ class HashMap {
     // their values but doesn't allow to change them.
     class const_iterator {
      public:
-         // Default constructor.
-        const_iterator() : pos(0), ptr(nullptr), check(nullptr) {}
+        // Default constructor.
+        const_iterator() : pos(0), ptr(nullptr), check(nullptr),
+            is_empty(nullptr) {}
 
         // Constructor with the given position.
         const_iterator(size_t pos_,
-            const std::vector<std::pair<const KeyType, ValueType>*>& ar,
-            const std::vector<bool>& used_) : pos(pos_), ptr(&ar),
-            check(&used_) {
+            const std::vector<std::pair<const KeyType, ValueType>>& ar,
+            const std::vector<bool>& used_,
+            const std::vector<bool>& is_empty_) : pos(pos_), ptr(&ar),
+            check(&used_), is_empty(&is_empty_) {
             go();
         }
 
@@ -119,23 +127,24 @@ class HashMap {
 
         // Returns constant item reference in O(1) time.
         std::pair<const KeyType, ValueType>* operator->() {
-            return (*ptr)[pos];
+            return &(*ptr)[pos];
         }
 
         // Returns constant item object in O(1) time.
         std::pair<const KeyType, ValueType> operator*() {
-            return *(*ptr)[pos];
+            return (*ptr)[pos];
         }
 
      private:
         size_t pos;
-        const std::vector<std::pair<const KeyType, ValueType>*>* ptr;
+        const std::vector<std::pair<const KeyType, ValueType>>* ptr;
         const std::vector<bool>* check;
+        const std::vector<bool>* is_empty;
 
         // Finds the next element in O(1) amortized.
         void go() {
-            while (pos < ptr->size() && ((*ptr)[pos] == nullptr
-                || (*check)[pos])) {
+            while (pos < ptr->size() &&
+                ((*is_empty)[pos] || (*check)[pos])) {
                 ++pos;
             }
         }
@@ -181,22 +190,10 @@ class HashMap {
         return (*this);
     }
 
-    ~HashMap() {
-        for (size_t i = 0; i < buffer_size; ++i) {
-            if (arr[i]) {
-                delete arr[i];
-            }
-        }
-    }
-
     // Deletes all elements in table in O(size)
     // and resets table to its beginning conditions.
     void clear() {
-        for (size_t i = 0; i < buffer_size; ++i) {
-            if (arr[i]) {
-                delete arr[i];
-            }
-        }
+        arr.clear();
         init();
     }
 
@@ -204,17 +201,17 @@ class HashMap {
     // Does nothing if key already exists.
     void insert(const std::pair<KeyType, ValueType>& item) {
         if (sz + 1 > size_t(overload_size * buffer_size)) {
-            double_size();
+            increase_size();
         }
-        if (size_all_non_nullptr > decreasing_size * sz) {
-            half_size();
+        if (size_all_non_nullptr > allowed_deleted_elements * sz) {
+            decrease_size();
         }
         size_t hash = hasher(item.first) % buffer_size;
         size_t i = 0;
         bool found = false;
         size_t first_deleted = 0;
-        while (arr[hash] != nullptr && i < buffer_size) {
-            if (arr[hash]->first == item.first && !used[hash]) {
+        while (!is_nullptr[hash] && i < buffer_size) {
+            if (arr[hash].first == item.first && !used[hash]) {
                 return;
             }
             if (used[hash] && !found) {
@@ -225,13 +222,12 @@ class HashMap {
             ++i;
         }
         if (!found) {
-            arr[hash] = new std::pair<const KeyType,
-                ValueType>(item.first, item.second);
+            is_nullptr[hash] = false;
+            arr[hash] = item;
             ++size_all_non_nullptr;
         } else {
-            delete arr[first_deleted];
-            arr[first_deleted] = new std::pair<const KeyType,
-                ValueType>(item.first, item.second);
+            is_nullptr[first_deleted] = false;
+            arr[first_deleted] = item;
             used[first_deleted] = false;
         }
         ++sz;
@@ -242,12 +238,13 @@ class HashMap {
     void erase(const KeyType& key) {
         size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[hash] != nullptr && i < buffer_size) {
-            if (arr[hash]->first == key && !used[hash]) {
+        while (!is_nullptr[hash] && i < buffer_size) {
+            if (arr[hash].first == key && !used[hash]) {
                 used[hash] = true;
                 --sz;
-                if (size_all_non_nullptr > decreasing_size * sz) {
-                    half_size();
+                if (size_all_non_nullptr >
+                    allowed_deleted_elements * sz) {
+                    decrease_size();
                 }
                 return;
             }
@@ -278,9 +275,9 @@ class HashMap {
     ValueType& operator[](const KeyType& key) {
         size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[hash] != nullptr && i < buffer_size) {
-            if (arr[hash]->first == key && !used[hash]) {
-                return arr[hash]->second;
+        while (!is_nullptr[hash] && i < buffer_size) {
+            if (arr[hash].first == key && !used[hash]) {
+                return arr[hash].second;
             }
             hash = (hash + 1) % buffer_size;
             ++i;
@@ -295,9 +292,9 @@ class HashMap {
     const ValueType& at(const KeyType& key) const {
         size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[hash] != nullptr && i < buffer_size) {
-            if (arr[hash]->first == key && !used[hash]) {
-                return arr[hash]->second;
+        while (!is_nullptr[hash] && i < buffer_size) {
+            if (arr[hash].first == key && !used[hash]) {
+                return arr[hash].second;
             }
             hash = (hash + 1) % buffer_size;
             ++i;
@@ -307,22 +304,22 @@ class HashMap {
 
     // Returns iterator to the first element in O(1) amortized.
     iterator begin() {
-        return iterator(0, arr, used);
+        return iterator(0, arr, used, is_nullptr);
     }
 
     // Returns iterator to the end of the table in O(1).
     iterator end() {
-        return iterator(buffer_size, arr, used);
+        return iterator(buffer_size, arr, used, is_nullptr);
     }
 
     // Returns const_iterator to the first element in O(1) amortized.
     const_iterator begin() const {
-        return const_iterator(0, arr, used);
+        return const_iterator(0, arr, used, is_nullptr);
     }
 
     // Returns const_iterator to the end of the table in O(1).
     const_iterator end() const {
-        return const_iterator(buffer_size, arr, used);
+        return const_iterator(buffer_size, arr, used, is_nullptr);
     }
 
     // Returns iterator to the pair with the given key
@@ -330,9 +327,9 @@ class HashMap {
     iterator find(const KeyType& key) {
         size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[hash] != nullptr && i < buffer_size) {
-            if (arr[hash]->first == key && !used[hash]) {
-                return iterator(hash, arr, used);
+        while (!is_nullptr[hash] && i < buffer_size) {
+            if (arr[hash].first == key && !used[hash]) {
+                return iterator(hash, arr, used, is_nullptr);
             }
             hash = (hash + 1) % buffer_size;
             ++i;
@@ -345,9 +342,9 @@ class HashMap {
     const_iterator find(const KeyType& key) const {
         size_t hash = hasher(key) % buffer_size;
         size_t i = 0;
-        while (arr[hash] != nullptr && i < buffer_size) {
-            if (arr[hash]->first == key && !used[hash]) {
-                return const_iterator(hash, arr, used);
+        while (!is_nullptr[hash] && i < buffer_size) {
+            if (arr[hash].first == key && !used[hash]) {
+                return const_iterator(hash, arr, used, is_nullptr);
             }
             hash = (hash + 1) % buffer_size;
             ++i;
@@ -357,66 +354,61 @@ class HashMap {
 
  private:
     Hash hasher;
+    // buffer_size - size of current state of hash table.
     size_t sz, buffer_size, size_all_non_nullptr;
-    std::vector<bool> used;
-    std::vector<std::pair<const KeyType, ValueType>*> arr;
+    std::vector<bool> used, is_nullptr;
+    std::vector<std::pair<KeyType, ValueType>> arr;
 
     // Initializes table.
     void init() {
         buffer_size = default_size;
         sz = 0;
         size_all_non_nullptr = 0;
-        arr = std::vector<std::pair<const KeyType, ValueType>*>(buffer_size);
-        for (size_t i = 0; i < buffer_size; ++i) {
-            arr[i] = nullptr;
-        }
+        arr = std::vector<std::pair<KeyType, ValueType>>(buffer_size);
         used.clear();
         used.resize(default_size, false);
+        is_nullptr.clear();
+        is_nullptr.resize(default_size, true);
     }
 
     // Doubles the size of a table and reinserts all elements in O(size) time.
-    void double_size() {
+    void increase_size() {
         size_t past_buffer_size = buffer_size;
-        buffer_size *= 2;
+        buffer_size *= increasing_size;
         size_all_non_nullptr = 0;
         sz = 0;
-        std::vector<bool> used2 = used;
+        std::vector<bool> prev_used = used;
+        std::vector<bool> prev_nullptr = is_nullptr;
         used.clear();
         used.resize(buffer_size, false);
-        std::vector<std::pair<const KeyType, ValueType>*> arr2(buffer_size,
-            nullptr);
-        std::swap(arr, arr2);
+        is_nullptr.clear();
+        is_nullptr.resize(buffer_size, true);
+        std::vector<std::pair<KeyType, ValueType>> prev_arr(buffer_size);
+        std::swap(arr, prev_arr);
         for (size_t i = 0; i < past_buffer_size; ++i) {
-            if (arr2[i] && !used2[i])
-                insert(*arr2[i]);
-        }
-        for (size_t i = 0; i < past_buffer_size; ++i) {
-            if (arr2[i]) {
-                delete arr2[i];
+            if (!prev_nullptr[i] && !prev_used[i]) {
+                insert(prev_arr[i]);
             }
         }
     }
 
     // Halves the size of a table and reinserts all elements in O(size) time.
-    void half_size() {
+    void decrease_size() {
         size_t past_buffer_size = buffer_size;
-        buffer_size /= 2;
+        buffer_size /= decreasing_size;
         size_all_non_nullptr = 0;
         sz = 0;
-        std::vector<bool> used2 = used;
+        std::vector<bool> prev_used = used;
+        std::vector<bool> prev_nullptr = is_nullptr;
         used.clear();
         used.resize(buffer_size, false);
-        std::vector<std::pair<const KeyType, ValueType>*> arr2(buffer_size,
-            nullptr);
-        std::swap(arr, arr2);
+        is_nullptr.clear();
+        is_nullptr.resize(buffer_size, true);
+        std::vector<std::pair<KeyType, ValueType>> prev_arr(buffer_size);
+        std::swap(arr, prev_arr);
         for (size_t i = 0; i < past_buffer_size; ++i) {
-            if (arr2[i] && !used2[i]) {
-                insert(*arr2[i]);
-            }
-        }
-        for (size_t i = 0; i < past_buffer_size; ++i) {
-            if (arr2[i]) {
-                delete arr2[i];
+            if (!prev_nullptr[i] && !prev_used[i]) {
+                insert(prev_arr[i]);
             }
         }
     }
