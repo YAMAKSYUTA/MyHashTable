@@ -201,17 +201,31 @@ class HashMap {
         init();
     }
 
-    // Adds a new pair of key and value to the table in O(1) amortized.
-    // Does nothing if key already exists.
-    void insert(const std::pair<KeyType, ValueType>& item) {
+    // Calls increase_size() method of a table if needed.
+    void check_density() {
         if (sz + 1 > size_t(overload_size * buffer_size)) {
             increase_size();
         }
+    }
+
+    // Calls decrease_size() method of a table if needed.
+    void check_deleted_elements() {
         if (size_all_non_nullptr > allowed_deleted_elements * sz) {
             decrease_size();
         }
+    }
+
+    // Adds a new pair of key and value to the table in O(1) amortized.
+    // Does nothing if key already exists.
+    void insert(const std::pair<KeyType, ValueType>& item) {
+        check_density();
+        check_deleted_elements();
+        
+        // Finds a position for element or checks if key already exists.
         size_t hash = hasher(item.first) % buffer_size;
         size_t i = 0;
+        // found == true if we want to insert an element to a position
+        // where we have a deleted element.
         bool found = false;
         size_t first_deleted = 0;
         while (!is_nullptr[hash] && i < buffer_size) {
@@ -221,10 +235,13 @@ class HashMap {
             if (used[hash] && !found) {
                 first_deleted = hash;
                 found = true;
+                break;
             }
             hash = (hash + 1) % buffer_size;
             ++i;
         }
+
+        // Adds an element to a found position.
         if (!found) {
             is_nullptr[hash] = false;
             arr[hash] = item;
@@ -246,10 +263,7 @@ class HashMap {
             if (arr[hash].first == key && !used[hash]) {
                 used[hash] = true;
                 --sz;
-                if (size_all_non_nullptr >
-                    allowed_deleted_elements * sz) {
-                    decrease_size();
-                }
+                check_deleted_elements();
                 return;
             }
             hash = (hash + 1) % buffer_size;
@@ -375,7 +389,7 @@ class HashMap {
         is_nullptr.resize(default_size, true);
     }
 
-    // Doubles the size of a table and reinserts all elements in O(size) time.
+    // Increases the size of a table and reinserts all elements in O(size) time.
     void increase_size() {
         size_t past_buffer_size = buffer_size;
         buffer_size *= increasing_size;
@@ -396,7 +410,7 @@ class HashMap {
         }
     }
 
-    // Halves the size of a table and reinserts all elements in O(size) time.
+    // Decreases the size of a table and reinserts all elements in O(size) time.
     void decrease_size() {
         size_t past_buffer_size = buffer_size;
         buffer_size /= decreasing_size;
